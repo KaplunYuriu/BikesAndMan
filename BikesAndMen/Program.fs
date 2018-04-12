@@ -3,9 +3,14 @@
 
 open FSharp.Data;
 open FSharp.Charting;
+open MathNet
+open MathNet.Numerics.LinearAlgebra
+open MathNet.Numerics.LinearAlgebra.Double
 open System;
 
 type CsvData = CsvProvider<"C:/code/BikesAndMen/BikesAndMen/Dataset/day.csv">
+type Obs = CsvData.Row
+type Model = Obs -> float
 
 let data = CsvData.Load("C:/code/BikesAndMen/BikesAndMen/Dataset/day.csv").Rows
     
@@ -19,7 +24,6 @@ let baseline =
     let avg = data |> Seq.averageBy(fun x -> float x.Cnt)
     data |> Seq.averageBy (fun x -> abs (float x.Cnt - avg))
 
-type Obs = CsvData.Row
 
 let model(theta0, theta1) (obs:Obs) = 
     theta0 + theta1 * (float obs.Instant)
@@ -27,7 +31,6 @@ let model(theta0, theta1) (obs:Obs) =
 let model0 = model(4504., 0.)
 let model1 = model(6000., -4.5)
 
-type Model = Obs -> float
 
 let cost(data: Obs seq) (m:Model) = 
     data 
@@ -46,6 +49,21 @@ let stochastic rate (theta0, theta1) =
     |> Seq.fold(fun(t0, t1) obs -> 
  //   printf "%.4f, %.4f \n" t0 t1
     update rate (t0, t1) obs) (theta0, theta1)
+
+let batchUpdate rate (theta0, theta1) (data:Obs seq) =
+    let updates =
+        data
+        |> Seq.map (update rate (theta0, theta1))
+    let theta0' = updates |> Seq.averageBy fst
+    let theta1' = updates |> Seq.averageBy snd
+    theta0', theta1'
+
+let batch rate iters =
+    let rec search (t0,t1) i =
+        if i = 0 then (t0,t1)
+        else
+        search (batchUpdate rate (t0,t1) data) (i-1)
+    search (0.0,0.0) iters
 
 [<EntryPoint>]
 let main argv = 
